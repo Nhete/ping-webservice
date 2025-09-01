@@ -3,19 +3,32 @@
 <head>
     <title>Ping Webservice</title>
     <style>
-        table { border-collapse: collapse; width: 70%; margin: auto; }
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; text-align: center; }
+        h2, h3 { margin-top: 20px; }
+        input, button { padding: 8px; margin: 8px; font-size: 1rem; }
+        table { border-collapse: collapse; width: 90%; margin: 20px auto; }
         th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
         .green { background-color: #c8e6c9; }
         .yellow { background-color: #fff9c4; }
         .red { background-color: #ffcdd2; }
+        ul { list-style-type: none; padding: 0; margin: 10px; }
+        li { display: inline-block; margin: 5px 10px; padding: 5px 10px; background: #f0f0f0; border-radius: 5px; }
     </style>
 </head>
 <body>
-    <h2 style="text-align:center;">Ping Webservice</h2>
-    <input type="text" id="ipInput" placeholder="Enter IP" />
+    <h2>Ping Webservice</h2>
+
+    <h3>Available Hosts</h3>
+    <ul>
+        {% for host in hosts %}
+            <li>{{ host }}</li>
+        {% endfor %}
+    </ul>
+
+    <input type="text" id="ipInput" placeholder="Enter IP to ping" />
     <button onclick="pingIP()">Ping</button>
 
-    <h3 style="text-align:center;">Results</h3>
+    <h3>Ping Results</h3>
     <table id="resultsTable">
         <tr>
             <th>IP</th>
@@ -33,8 +46,9 @@
 
     <script>
         function pingIP() {
-            const ip = document.getElementById("ipInput").value;
-            if (!ip) return alert("Enter an IP");
+            const ip = document.getElementById("ipInput").value.trim();
+            if (!ip) return alert("Enter an IP address");
+
             fetch("/ping", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -55,16 +69,12 @@
                     row.cells[2].innerText = data.output;
                 }
 
-                if (data.success_rate === "blocked") {
-                    row.className = "red";
-                } else if (data.success_rate >= 80) {
-                    row.className = "green";
-                } else if (data.success_rate >=50) {
-                    row.className = "yellow";
-                } else {
-                    row.className = "red";
-                }
-            });
+                // Update row color
+                if (data.success_rate >= 80) row.className = "green";
+                else if (data.success_rate >= 50) row.className = "yellow";
+                else row.className = "red";
+            })
+            .catch(err => alert("Error: " + err));
         }
     </script>
 </body>

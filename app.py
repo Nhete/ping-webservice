@@ -1,26 +1,42 @@
+import os
 from flask import Flask, jsonify, request, render_template
 import subprocess
 import socket
 
 app = Flask(__name__)
-
-# In-memory storage for all ping results
 ping_results = {}
 
-# TCP check fallback for Render
+# Load filtered hosts from file
+def load_filtered_hosts():
+    hosts = []
+    try:
+        with open("filtered_hosts.txt") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    hosts.append(line)
+    except FileNotFoundError:
+        pass
+    return hosts
+
+filtered_hosts = load_filtered_hosts()
+
+# TCP fallback for Render
 def check_tcp(ip, port=5060, timeout=2):
     try:
         with socket.create_connection((ip, port), timeout=timeout):
-            return 100  # reachable
+            return 100
     except Exception:
-        return 0  # unreachable
+        return 0
 
-# Home page
 @app.route("/", methods=["GET"])
 def home():
-    return render_template("index.html", results=ping_results)
+    return render_template(
+        "index.html",
+        results=ping_results,
+        hosts=filtered_hosts
+    )
 
-# Ping endpoint
 @app.route("/ping", methods=["POST"])
 def ping_host():
     data = request.get_json()
@@ -44,13 +60,12 @@ def ping_host():
         for line in output.splitlines():
             if "packet loss" in line:
                 success_rate = 100 - float(line.split("%")[0].split()[-1])
-        
-        # Fallback for Render
+
+        # Fallback TCP check if ping fails
         if success_rate is None:
             success_rate = check_tcp(ip)
-            output = "Ping blocked, used TCP check instead"
+            output = "Ping blocked or failed, used TCP check instead"
 
-        # Save in memory
         ping_results[ip] = {"success_rate": success_rate, "output": output}
 
         return jsonify({
@@ -63,6 +78,6 @@ def ping_host():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
