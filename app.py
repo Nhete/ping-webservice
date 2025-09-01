@@ -1,6 +1,5 @@
 import os
 import socket
-import subprocess
 import traceback
 from flask import Flask, request, jsonify, render_template
 import requests
@@ -24,7 +23,7 @@ def load_hosts(filename="filtered_hosts.txt"):
 hosts = load_hosts()
 
 # TCP multi-port check
-def tcp_check(host, ports=[22, 80, 443, 8080, 8443], timeout=2):
+def tcp_check(host, ports=[22, 80, 443, 5060, 8080, 8443], timeout=2):
     for port in ports:
         try:
             with socket.create_connection((host, port), timeout=timeout):
@@ -44,16 +43,12 @@ def http_check(host):
         pass
     return 0, "HTTP check failed"
 
-# Full host check: TCP -> HTTP
+# Check host: TCP first, then HTTP
 def check_host(host):
-    # TCP multi-port check first
     success, status = tcp_check(host)
     if success:
         return success, status
-
-    # HTTP fallback
-    success, status = http_check(host)
-    return success, status
+    return http_check(host)
 
 # Prepopulate overview results
 for host in hosts:
@@ -77,7 +72,7 @@ def home():
 
     return render_template("index.html", results=ping_results, summary=summary)
 
-# Ping endpoint for live checks
+# Live ping endpoint
 @app.route("/ping", methods=["POST"])
 def ping_host():
     try:
