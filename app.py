@@ -3,6 +3,12 @@ import subprocess
 
 app = Flask(__name__)
 
+# Simple GET endpoint for quick service check
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({"message": "Ping service is running!"})
+
+# POST endpoint to run ping tests
 @app.route("/ping", methods=["POST"])
 def ping_host():
     """
@@ -32,10 +38,10 @@ def ping_host():
         )
         output = result.stdout
         # Parse success rate from ping output
-        success_line = [line for line in output.splitlines() if "packet loss" in line]
         success_rate = None
-        if success_line:
-            success_rate = 100 - float(success_line[0].split("%")[0].split()[-1])
+        for line in output.splitlines():
+            if "packet loss" in line:
+                success_rate = 100 - float(line.split("%")[0].split()[-1])
 
         return jsonify({
             "ip": ip,
