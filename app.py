@@ -1,40 +1,33 @@
 import os
-from flask import Flask, jsonify, request, render_template
-import subprocess
 import socket
+import subprocess
 import traceback
+from flask import Flask, request, jsonify, render_template
+import requests
 
 app = Flask(__name__)
 ping_results = {}
 
-# Load filtered hosts
-def load_filtered_hosts():
+# Load hosts from file
+def load_hosts(filename="filtered_hosts.txt"):
     hosts = []
     try:
-        with open("filtered_hosts.txt") as f:
+        with open(filename) as f:
             for line in f:
-                line = line.strip()
-                if line:
-                    hosts.append(line)
+                host = line.strip()
+                if host:
+                    hosts.append(host)
     except FileNotFoundError:
         pass
     return hosts
 
-filtered_hosts = load_filtered_hosts()
+hosts = load_hosts()
 
-# TCP fallback check
-def check_tcp(ip, port=5060, timeout=2):
-    try:
-        with socket.create_connection((ip, port), timeout=timeout):
-            return 100
-    except Exception:
-        return 0
-
-# Safe ICMP ping
-def run_ping(ip, count=4, size=1400):
+# ICMP ping (works locally)
+def icmp_ping(host, count=4, size=1400):
     try:
         result = subprocess.run(
-            ["ping", "-c", str(count), "-s", str(size), "-M", "do", ip],
+            ["ping", "-c", str(count), "-s", str(size), "-M", "do", host],
             capture_output=True,
             text=True,
             check=False
@@ -45,75 +38,89 @@ def run_ping(ip, count=4, size=1400):
             if "packet loss" in line:
                 success_rate = 100 - float(line.split("%")[0].split()[-1])
         if success_rate is not None:
-            return success_rate, output, "ICMP ping"
-        else:
-            return None, output, None
+            return success_rate, "ICMP ping"
     except Exception as e:
-        print(f"Ping subprocess error for {ip}: {e}")
-        return None, f"Ping command failed: {e}", None
+        pass
+    return None, None
 
-# Pre-populate overview with TCP fallback
-for host in filtered_hosts:
-    if host not in ping_results:
-        success_rate = check_tcp(host)
-        output = "Initial TCP check" if success_rate == 100 else "TCP check failed"
-        ping_results[host] = {"success_rate": success_rate, "output": output, "status": "TCP fallback"}
+# TCP multi-port check
+def tcp_check(host, ports=[22, 80, 443], timeout=2):
+    for port in ports:
+        try:
+            with socket.create_connection((host, port), timeout=timeout):
+                return 100, f"TCP reachable on port {port}"
+        except Exception:
+            continue
+    return 0, "TCP check failed"
 
-@app.route("/", methods=["GET"])
+# HTTP GET fallback
+def http_check(host):
+    try:
+        url = host if host.startswith("http") else f"http://{host}"
+        r = requests.get(url, timeout=2)
+        if r.status_code < 400:
+            return 100, f"HTTP reachable ({r.status_code})"
+    except Exception:
+        pass
+    return 0, "HTTP check failed"
+
+# Full host check: ICMP -> TCP -> HTTP
+def check_host(host):
+    # ICMP ping first
+    success, status = icmp_ping(host)
+    if success is not None:
+        return success, status
+
+    # TCP fallback
+    success, status = tcp_check(host)
+    if success:
+        return success, status
+
+    # HTTP fallback
+    success, status = http_check(host)
+    return success, status
+
+# Prepopulate ping_results for overview
+for host in hosts:
+    success_rate, status = check_host(host)
+    ping_results[host] = {"success_rate": success_rate, "status": status}
+
+# Home page
+@app.route("/")
 def home():
-    # Compute summary
-    total_hosts = len(filtered_hosts)
-    success_100 = [ip for ip, data in ping_results.items() if data["success_rate"] == 100]
-    partial = [ip for ip, data in ping_results.items() if 0 < data["success_rate"] < 100]
-    failed = [ip for ip, data in ping_results.items() if data["success_rate"] == 0]
+    total_hosts = len(hosts)
+    success_100 = [h for h, d in ping_results.items() if d["success_rate"] == 100]
+    partial = [h for h, d in ping_results.items() if 0 < d["success_rate"] < 100]
+    failed = [h for h, d in ping_results.items() if d["success_rate"] == 0]
 
     summary = {
-        "total_hosts": total_hosts,
+        "total": total_hosts,
         "success_100": success_100,
         "partial": partial,
         "failed": failed
     }
 
-    return render_template(
-        "index.html",
-        results=ping_results,
-        hosts=filtered_hosts,
-        summary=summary
-    )
+    return render_template("index.html", results=ping_results, summary=summary)
 
+# Ping endpoint for live checks
 @app.route("/ping", methods=["POST"])
 def ping_host():
     try:
         data = request.get_json()
-        ip = data.get("ip")
-        count = data.get("count", 4)
-        size = data.get("size", 1400)
+        host = data.get("host")
+        if not host:
+            return jsonify({"error": "Host is required"}), 400
 
-        if not ip:
-            return jsonify({"error": "IP address is required"}), 400
-
-        # Run ICMP ping
-        success_rate, output, status = run_ping(ip, count, size)
-
-        # TCP fallback if ICMP fails
-        if success_rate is None:
-            success_rate = check_tcp(ip)
-            output = "Ping blocked or failed, used TCP fallback"
-            status = "TCP fallback"
-
-        ping_results[ip] = {"success_rate": success_rate, "output": output, "status": status}
+        success, status = check_host(host)
+        ping_results[host] = {"success_rate": success, "status": status}
 
         return jsonify({
-            "ip": ip,
-            "count": count,
-            "size": size,
-            "success_rate": success_rate,
-            "output": output,
+            "host": host,
+            "success_rate": success,
             "status": status
         })
 
     except Exception as e:
-        print("ERROR in /ping:", e)
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 

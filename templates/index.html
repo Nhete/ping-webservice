@@ -3,115 +3,92 @@
 <head>
     <title>Ping Webservice</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 0; text-align: center; }
-        h2, h3 { margin-top: 20px; }
-        input, button { padding: 8px; margin: 8px; font-size: 1rem; }
+        body { font-family: Arial; text-align: center; margin: 0; padding: 0; }
         table { border-collapse: collapse; width: 90%; margin: 20px auto; }
         th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
         .green { background-color: #c8e6c9; }
         .yellow { background-color: #fff9c4; }
         .red { background-color: #ffcdd2; }
-        .clickable-host {
-            cursor: pointer;
-            text-decoration: underline;
-            color: blue;
-        }
-        .clickable-host:hover {
-            color: darkblue;
-        }
+        .clickable { cursor: pointer; color: blue; text-decoration: underline; }
+        .clickable:hover { color: darkblue; }
+        input, button { padding: 6px; margin: 6px; font-size: 1rem; }
     </style>
 </head>
 <body>
     <h2>Ping Webservice</h2>
 
-    <h3>Results Overview (Click a host to ping)</h3>
-    <table style="width: 80%; margin: auto; border-collapse: collapse;">
-        <tr>
-            <th>Total Hosts</th>
-            <td>{{ summary.total_hosts }}</td>
-        </tr>
+    <h3>Overview (click host to ping)</h3>
+    <table>
+        <tr><th>Total Hosts</th><td>{{ summary.total }}</td></tr>
         <tr>
             <th>100% Success</th>
             <td>
-                {% for ip in summary.success_100 %}
-                    <span class="clickable-host" onclick="pingIP('{{ ip }}')">{{ ip }}</span>{% if not loop.last %}, {% endif %}
+                {% for h in summary.success_100 %}
+                    <span class="clickable" onclick="pingHost('{{ h }}')">{{ h }}</span>{% if not loop.last %}, {% endif %}
                 {% endfor %}
             </td>
         </tr>
         <tr>
-            <th>Partial Success</th>
+            <th>Partial</th>
             <td>
-                {% for ip in summary.partial %}
-                    <span class="clickable-host" onclick="pingIP('{{ ip }}')">{{ ip }}</span>{% if not loop.last %}, {% endif %}
+                {% for h in summary.partial %}
+                    <span class="clickable" onclick="pingHost('{{ h }}')">{{ h }}</span>{% if not loop.last %}, {% endif %}
                 {% endfor %}
             </td>
         </tr>
         <tr>
             <th>Failed</th>
             <td>
-                {% for ip in summary.failed %}
-                    <span class="clickable-host" onclick="pingIP('{{ ip }}')">{{ ip }}</span>{% if not loop.last %}, {% endif %}
+                {% for h in summary.failed %}
+                    <span class="clickable" onclick="pingHost('{{ h }}')">{{ h }}</span>{% if not loop.last %}, {% endif %}
                 {% endfor %}
             </td>
         </tr>
     </table>
 
-    <h3>Ping a Specific Host</h3>
-    <input type="text" id="ipInput" placeholder="Enter IP to ping" />
-    <button onclick="pingIP()">Ping</button>
+    <h3>Ping a Host</h3>
+    <input type="text" id="hostInput" placeholder="Enter host/IP">
+    <button onclick="pingHost()">Ping</button>
 
     <h3>Ping Results</h3>
     <table id="resultsTable">
-        <tr>
-            <th>IP</th>
-            <th>Success Rate (%)</th>
-            <th>Output</th>
-            <th>Status</th>
-        </tr>
-        {% for ip, data in results.items() %}
-        <tr id="row-{{ip}}" class="{% if data.success_rate >= 80 %}green{% elif data.success_rate >=50 %}yellow{% else %}red{% endif %}">
-            <td>{{ ip }}</td>
-            <td>{{ data.success_rate }}</td>
-            <td>{{ data.output }}</td>
-            <td>{{ data.status }}</td>
+        <tr><th>Host</th><th>Success (%)</th><th>Status</th></tr>
+        {% for h, d in results.items() %}
+        <tr id="row-{{ h }}" class="{% if d.success_rate >=80 %}green{% elif d.success_rate>=50 %}yellow{% else %}red{% endif %}">
+            <td>{{ h }}</td>
+            <td>{{ d.success_rate }}</td>
+            <td>{{ d.status }}</td>
         </tr>
         {% endfor %}
     </table>
 
     <script>
-        function pingIP(ip = null) {
-            if (!ip) {
-                ip = document.getElementById("ipInput").value.trim();
-                if (!ip) return alert("Enter an IP address");
-            }
+        function pingHost(host=null) {
+            if(!host) host = document.getElementById("hostInput").value.trim();
+            if(!host) return alert("Enter host/IP");
 
             fetch("/ping", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ ip: ip })
+                headers: {"Content-Type":"application/json"},
+                body: JSON.stringify({host: host})
             })
             .then(res => res.json())
             .then(data => {
-                let row = document.getElementById(`row-${data.ip}`);
-                if (!row) {
+                let row = document.getElementById("row-" + data.host);
+                if(!row){
                     const table = document.getElementById("resultsTable");
                     row = table.insertRow();
-                    row.id = `row-${data.ip}`;
-                    row.insertCell(0).innerText = data.ip;
+                    row.id = "row-" + data.host;
+                    row.insertCell(0).innerText = data.host;
                     row.insertCell(1).innerText = data.success_rate;
-                    row.insertCell(2).innerText = data.output;
-                    row.insertCell(3).innerText = data.status;
+                    row.insertCell(2).innerText = data.status;
                 } else {
                     row.cells[1].innerText = data.success_rate;
-                    row.cells[2].innerText = data.output;
-                    row.cells[3].innerText = data.status;
+                    row.cells[2].innerText = data.status;
                 }
-
-                if (data.success_rate >= 80) row.className = "green";
-                else if (data.success_rate >= 50) row.className = "yellow";
-                else row.className = "red";
+                row.className = (data.success_rate>=80?"green":(data.success_rate>=50?"yellow":"red"));
             })
-            .catch(err => alert("Error: " + err));
+            .catch(err=>alert("Error: "+err));
         }
     </script>
 </body>
