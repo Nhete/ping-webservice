@@ -8,7 +8,7 @@ import requests
 app = Flask(__name__)
 ping_results = {}
 
-# Load hosts from file
+# Load hosts from filtered_hosts.txt
 def load_hosts(filename="filtered_hosts.txt"):
     hosts = []
     try:
@@ -23,28 +23,8 @@ def load_hosts(filename="filtered_hosts.txt"):
 
 hosts = load_hosts()
 
-# ICMP ping (works locally)
-def icmp_ping(host, count=4, size=1400):
-    try:
-        result = subprocess.run(
-            ["ping", "-c", str(count), "-s", str(size), "-M", "do", host],
-            capture_output=True,
-            text=True,
-            check=False
-        )
-        output = result.stdout
-        success_rate = None
-        for line in output.splitlines():
-            if "packet loss" in line:
-                success_rate = 100 - float(line.split("%")[0].split()[-1])
-        if success_rate is not None:
-            return success_rate, "ICMP ping"
-    except Exception as e:
-        pass
-    return None, None
-
 # TCP multi-port check
-def tcp_check(host, ports=[22, 80, 443], timeout=2):
+def tcp_check(host, ports=[22, 80, 443, 8080, 8443], timeout=2):
     for port in ports:
         try:
             with socket.create_connection((host, port), timeout=timeout):
@@ -64,14 +44,9 @@ def http_check(host):
         pass
     return 0, "HTTP check failed"
 
-# Full host check: ICMP -> TCP -> HTTP
+# Full host check: TCP -> HTTP
 def check_host(host):
-    # ICMP ping first
-    success, status = icmp_ping(host)
-    if success is not None:
-        return success, status
-
-    # TCP fallback
+    # TCP multi-port check first
     success, status = tcp_check(host)
     if success:
         return success, status
@@ -80,7 +55,7 @@ def check_host(host):
     success, status = http_check(host)
     return success, status
 
-# Prepopulate ping_results for overview
+# Prepopulate overview results
 for host in hosts:
     success_rate, status = check_host(host)
     ping_results[host] = {"success_rate": success_rate, "status": status}

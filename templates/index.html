@@ -17,7 +17,7 @@
 <body>
     <h2>Ping Webservice</h2>
 
-    <h3>Overview (click host to ping)</h3>
+    <h3>Overview (click host to check)</h3>
     <table>
         <tr><th>Total Hosts</th><td>{{ summary.total }}</td></tr>
         <tr>
@@ -46,15 +46,15 @@
         </tr>
     </table>
 
-    <h3>Ping a Host</h3>
+    <h3>Check a Host</h3>
     <input type="text" id="hostInput" placeholder="Enter host/IP">
-    <button onclick="pingHost()">Ping</button>
+    <button onclick="pingHost()">Check</button>
 
-    <h3>Ping Results</h3>
+    <h3>Results</h3>
     <table id="resultsTable">
         <tr><th>Host</th><th>Success (%)</th><th>Status</th></tr>
         {% for h, d in results.items() %}
-        <tr id="row-{{ h }}" class="{% if d.success_rate >=80 %}green{% elif d.success_rate>=50 %}yellow{% else %}red{% endif %}">
+        <tr id="row-{{ h }}" class="{% if d.success_rate>=80 %}green{% elif d.success_rate>=50 %}yellow{% else %}red{% endif %}">
             <td>{{ h }}</td>
             <td>{{ d.success_rate }}</td>
             <td>{{ d.status }}</td>
