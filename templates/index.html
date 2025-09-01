@@ -1,84 +1,71 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ping Web Service</title>
+    <title>Ping Webservice</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; background: #f4f4f4; }
-        h1 { color: #333; }
-        input, button { padding: 8px 12px; margin: 5px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { padding: 10px; border: 1px solid #ccc; text-align: left; }
-        th { background: #eee; }
-        .success { color: green; font-weight: bold; }
-        .medium { color: orange; font-weight: bold; }
-        .fail { color: red; font-weight: bold; }
+        table { border-collapse: collapse; width: 70%; margin: auto; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+        .green { background-color: #c8e6c9; }
+        .yellow { background-color: #fff9c4; }
+        .red { background-color: #ffcdd2; }
     </style>
 </head>
 <body>
-    <h1>Ping Web Service</h1>
+    <h2 style="text-align:center;">Ping Webservice</h2>
+    <input type="text" id="ipInput" placeholder="Enter IP" />
+    <button onclick="pingIP()">Ping</button>
 
-    <h2>Ping a Single IP</h2>
-    <input type="text" id="ip" placeholder="Enter IP address">
-    <button onclick="pingSingle()">Ping</button>
-
-    <h2>Results</h2>
+    <h3 style="text-align:center;">Results</h3>
     <table id="resultsTable">
-        <thead>
-            <tr>
-                <th>IP</th>
-                <th>Success Rate (%)</th>
-                <th>Packet Loss (%)</th>
-            </tr>
-        </thead>
-        <tbody>
-        </tbody>
+        <tr>
+            <th>IP</th>
+            <th>Success Rate (%)</th>
+            <th>Output</th>
+        </tr>
+        {% for ip, data in results.items() %}
+        <tr id="row-{{ip}}" class="{% if data.success_rate >= 80 %}green{% elif data.success_rate >=50 %}yellow{% else %}red{% endif %}">
+            <td>{{ ip }}</td>
+            <td>{{ data.success_rate }}</td>
+            <td>{{ data.output }}</td>
+        </tr>
+        {% endfor %}
     </table>
 
     <script>
-        async function pingSingle() {
-            const ip = document.getElementById("ip").value.trim();
-            if (!ip) { alert("Enter a valid IP"); return; }
-
-            const response = await fetch("/ping", {
+        function pingIP() {
+            const ip = document.getElementById("ipInput").value;
+            if (!ip) return alert("Enter an IP");
+            fetch("/ping", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ ip: ip, count: 4, size: 1400 })
+                body: JSON.stringify({ ip: ip })
+            })
+            .then(res => res.json())
+            .then(data => {
+                let row = document.getElementById(`row-${data.ip}`);
+                if (!row) {
+                    const table = document.getElementById("resultsTable");
+                    row = table.insertRow();
+                    row.id = `row-${data.ip}`;
+                    row.insertCell(0).innerText = data.ip;
+                    row.insertCell(1).innerText = data.success_rate;
+                    row.insertCell(2).innerText = data.output;
+                } else {
+                    row.cells[1].innerText = data.success_rate;
+                    row.cells[2].innerText = data.output;
+                }
+
+                if (data.success_rate === "blocked") {
+                    row.className = "red";
+                } else if (data.success_rate >= 80) {
+                    row.className = "green";
+                } else if (data.success_rate >=50) {
+                    row.className = "yellow";
+                } else {
+                    row.className = "red";
+                }
             });
-
-            const data = await response.json();
-            displayResults([data]);
         }
-
-        function displayResults(results) {
-            const tbody = document.getElementById("resultsTable").querySelector("tbody");
-            tbody.innerHTML = "";
-
-            results.forEach(row => {
-                let rateClass = 'fail';
-                if (row.success_rate === 100) rateClass = 'success';
-                else if (row.success_rate >= 50) rateClass = 'medium';
-
-                const tr = document.createElement("tr");
-                tr.innerHTML = `
-                    <td>${row.ip}</td>
-                    <td class="${rateClass}">${row.success_rate ?? 'N/A'}</td>
-                    <td>${row.packet_loss ?? 'N/A'}</td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
-        // Optional: automatically fetch all IPs on page load
-        async function pingAll() {
-            const response = await fetch("/ping_all", { method: "GET" });
-            const data = await response.json();
-            displayResults(data);
-        }
-
-        // Uncomment below to auto-load all IPs on page open
-        // window.onload = pingAll;
     </script>
 </body>
 </html>
