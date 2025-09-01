@@ -7,7 +7,7 @@ WORKDIR /app
 # Copy app files
 COPY app.py requirements.txt ./
 COPY templates/ ./templates
-COPY filter_hosts.txt ./filter_hosts.txt
+COPY filtered_hosts.txt ./filtered_hosts.txt
 
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
