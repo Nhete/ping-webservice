@@ -22,7 +22,7 @@ def load_filtered_hosts():
 
 filtered_hosts = load_filtered_hosts()
 
-# TCP fallback
+# TCP fallback check
 def check_tcp(ip, port=5060, timeout=2):
     try:
         with socket.create_connection((ip, port), timeout=timeout):
@@ -30,7 +30,7 @@ def check_tcp(ip, port=5060, timeout=2):
     except Exception:
         return 0
 
-# Safe ping function
+# Safe ICMP ping
 def run_ping(ip, count=4, size=1400):
     try:
         result = subprocess.run(
@@ -44,10 +44,20 @@ def run_ping(ip, count=4, size=1400):
         for line in output.splitlines():
             if "packet loss" in line:
                 success_rate = 100 - float(line.split("%")[0].split()[-1])
-        return success_rate, output
+        if success_rate is not None:
+            return success_rate, output, "ICMP ping"
+        else:
+            return None, output, None
     except Exception as e:
         print(f"Ping subprocess error for {ip}: {e}")
-        return None, f"Ping command failed: {e}"
+        return None, f"Ping command failed: {e}", None
+
+# Pre-populate overview with TCP fallback
+for host in filtered_hosts:
+    if host not in ping_results:
+        success_rate = check_tcp(host)
+        output = "Initial TCP check" if success_rate == 100 else "TCP check failed"
+        ping_results[host] = {"success_rate": success_rate, "output": output, "status": "TCP fallback"}
 
 @app.route("/", methods=["GET"])
 def home():
@@ -82,21 +92,24 @@ def ping_host():
         if not ip:
             return jsonify({"error": "IP address is required"}), 400
 
-        success_rate, output = run_ping(ip, count, size)
+        # Run ICMP ping
+        success_rate, output, status = run_ping(ip, count, size)
 
-        # TCP fallback if ping failed
+        # TCP fallback if ICMP fails
         if success_rate is None:
             success_rate = check_tcp(ip)
-            output = "Ping blocked or failed, used TCP check instead"
+            output = "Ping blocked or failed, used TCP fallback"
+            status = "TCP fallback"
 
-        ping_results[ip] = {"success_rate": success_rate, "output": output}
+        ping_results[ip] = {"success_rate": success_rate, "output": output, "status": status}
 
         return jsonify({
             "ip": ip,
             "count": count,
             "size": size,
             "success_rate": success_rate,
-            "output": output
+            "output": output,
+            "status": status
         })
 
     except Exception as e:
