@@ -4,8 +4,10 @@ FROM python:3.12-slim
 # Set working directory
 WORKDIR /app
 
-# Copy application code and requirements
-COPY . .
+# Copy app files
+COPY app.py requirements.txt ./
+COPY templates/ ./templates
+COPY filter_hosts.txt ./filter_hosts.txt
 
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
@@ -13,5 +15,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Expose the port your Flask app will run on
 EXPOSE 10000
 
-# Start the web service
+# Run the Flask app
 CMD ["python", "app.py"]
